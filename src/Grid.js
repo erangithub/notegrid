@@ -154,109 +154,151 @@ const Grid = () => {
       handleBlur(); // Save and exit edit mode
     }
   };
+  /// Save to JSON (including headers)
+  const saveToJSON = () => {
+    const data = {
+      rows: rows,  // Include the row names
+      cols: cols,  // Include the column names
+      notes: notes, // Include the note data
+    };
+
+    const jsonData = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'notes.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Load from JSON (including headers)
+  const loadFromJSON = (file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const loadedData = JSON.parse(reader.result);
+        setRows(loadedData.rows);  // Restore the row headers
+        setCols(loadedData.cols);  // Restore the column headers
+        setNotes(loadedData.notes);  // Restore the notes
+      } catch (error) {
+        console.error('Error loading JSON:', error);
+        alert('Failed to load JSON. Please make sure the file is valid.');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <div
-        className="grid-container"
-        style={{ gridTemplateColumns: `repeat(${cols.length}, max-content)` }}
-      >
-        {rows.map((row, rowIndex) =>
-          cols.map((col, colIndex) => {
-            const cellKey = `${rowIndex}-${colIndex}`;
+    <div>
+      <button onClick={saveToJSON}>Save Notes</button>
+      <input
+        type="file"
+        accept=".json"
+        onChange={(e) => loadFromJSON(e.target.files[0])}
+      />
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div
+          className="grid-container"
+          style={{ gridTemplateColumns: `repeat(${cols.length}, max-content)` }}
+        >
+          {rows.map((row, rowIndex) =>
+            cols.map((col, colIndex) => {
+              const cellKey = `${rowIndex}-${colIndex}`;
 
-            if (rowIndex === 0) {
-              // Column headers
-              return (
-                <div
-                  className="column-header-cell"
-                  onDoubleClick={() => handleHeaderDoubleClick(rowIndex, colIndex, false)}
-                >
-                  {editingHeader.col === colIndex ? (
-                    <input
-                      value={headerText}
-                      onChange={handleHeaderChange}
-                      onBlur={handleHeaderBlur}
-                      onKeyDown={handleHeaderKeyDown}
-                      autoFocus
-                    />
-                  ) : (
-                    col
-                  )}
-                </div>
-              );
-            }
-        
-            if (colIndex === 0) {
-              // Row headers
-              return (
-                <div
-                  className="row-header-cell"
-                  onDoubleClick={() => handleHeaderDoubleClick(rowIndex, colIndex, true)}
-                >
-                  {editingHeader.row === rowIndex ? (
-                    <input
-                      value={headerText}
-                      onChange={handleHeaderChange}
-                      onBlur={handleHeaderBlur}
-                      onKeyDown={handleHeaderKeyDown}
-                      autoFocus
-                    />
-                  ) : (
-                    row
-                  )}
-                </div>
-              );
-            }
-
-            return (
-              <Droppable key={cellKey} droppableId={cellKey}>
-                {(provided) => (
+              if (rowIndex === 0) {
+                // Column headers
+                return (
                   <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="droppable-cell"
-                    onDoubleClick={() => handleDoubleClick(cellKey)}
+                    className="column-header-cell"
+                    onDoubleClick={() => handleHeaderDoubleClick(rowIndex, colIndex, false)}
                   >
-                    {notes[cellKey]?.map((note, index) => (
-                      <Draggable key={note.id} draggableId={note.id} index={index}>
-                        {(provided) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className="note"
-                            onDoubleClick={(e) => {
-                              e.stopPropagation(); // Prevent triggering cell's double-click
-                              handleNoteDoubleClick(note);
-                            }}
-                          >
-                            {editingNoteId === note.id ? (
-                              <textarea
-                                ref={textareaRef}
-                                type="text"
-                                value={editText}
-                                onChange={handleChange}
-                                onBlur={handleBlur}
-                                onKeyDown={handleKeyDown}
-                                autoFocus
-                              />
-                            ) : (
-                              <ReactMarkdown>{note.text}</ReactMarkdown>
-                            )}
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
+                    {editingHeader.col === colIndex ? (
+                      <input
+                        value={headerText}
+                        onChange={handleHeaderChange}
+                        onBlur={handleHeaderBlur}
+                        onKeyDown={handleHeaderKeyDown}
+                        autoFocus
+                      />
+                    ) : (
+                      col
+                    )}
                   </div>
-                )}
-              </Droppable>
-            );
-          })
-        )}
-      </div>
-    </DragDropContext>
+                );
+              }
+          
+              if (colIndex === 0) {
+                // Row headers
+                return (
+                  <div
+                    className="row-header-cell"
+                    onDoubleClick={() => handleHeaderDoubleClick(rowIndex, colIndex, true)}
+                  >
+                    {editingHeader.row === rowIndex ? (
+                      <input
+                        value={headerText}
+                        onChange={handleHeaderChange}
+                        onBlur={handleHeaderBlur}
+                        onKeyDown={handleHeaderKeyDown}
+                        autoFocus
+                      />
+                    ) : (
+                      row
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <Droppable key={cellKey} droppableId={cellKey}>
+                  {(provided) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className="droppable-cell"
+                      onDoubleClick={() => handleDoubleClick(cellKey)}
+                    >
+                      {notes[cellKey]?.map((note, index) => (
+                        <Draggable key={note.id} draggableId={note.id} index={index}>
+                          {(provided) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              className="note"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation(); // Prevent triggering cell's double-click
+                                handleNoteDoubleClick(note);
+                              }}
+                            >
+                              {editingNoteId === note.id ? (
+                                <textarea
+                                  ref={textareaRef}
+                                  type="text"
+                                  value={editText}
+                                  onChange={handleChange}
+                                  onBlur={handleBlur}
+                                  onKeyDown={handleKeyDown}
+                                  autoFocus
+                                />
+                              ) : (
+                                <ReactMarkdown>{note.text}</ReactMarkdown>
+                              )}
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              );
+            })
+          )}
+        </div>
+      </DragDropContext>
+    </div>
   );
 };
 
