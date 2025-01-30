@@ -10,7 +10,7 @@
 }
 
 .grid-container .column-header-cell {
-    border: 1px solid #000;
+    border: 0.5px solid #000;
     padding: 8px;
     border-radius: 0px;
     background-color: #c2c2c2;
@@ -20,7 +20,7 @@
 }
 
 .grid-container .row-header-cell {
-    border: 1px solid #000;
+    border: 0.5px solid #000;
     padding: 8px;
     border-radius: 0px;
     background-color: #c2c2c2;
@@ -30,18 +30,19 @@
 }
 
 .grid-container .droppable-cell {
-    border: 1px solid #ccc;
-    padding: 2px;
+    border: 0.5px solid #000000;
+    padding: 1px;
     border-radius: 0px;
     background-color: #ffffff;
     position: relative;
+    min-width: 50px;
 }
 
 .grid-container .note {
-    background: #f3f88a;
-    border: 1px solid #ccc;
+    background: #ffffab;
+    border: 1px solid #000;
     padding: 4px 4px;
     margin: 4px 2px;
-    border-radius: 4px;
+    border-radius: 0px;
     cursor: grab;
 }
