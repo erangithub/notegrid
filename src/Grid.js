@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown"
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { Menu, Item, Separator, Submenu, useContextMenu } from 'react-contexify';
+import 'react-contexify/ReactContexify.css';
 import './Grid.css';
+
+const MENU_ID_COLUMN = 'menu_col';
+const MENU_ID_ROW = 'menu_row';
+
 
 const newNote = (text) => {
   const id = `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -17,10 +23,29 @@ const Grid = () => {
     "2-3": [newNote("Vacation Note")],
   });
 
+  const { show, hideAll } = useContextMenu({
+    id: "menuId",
+    props: {
+      key: "value"
+    }
+  });
+
+  function handleContextMenu(event, rowIndex, colIndex){
+    console.log("handleContextMenu", rowIndex, colIndex)
+    event.preventDefault()
+      show({
+        event,
+        id: rowIndex == 0 ? MENU_ID_COLUMN : MENU_ID_ROW
+      })
+    
+    setTarget({row: rowIndex, col: colIndex})
+  }
+
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editText, setEditText] = useState("");
   const [editingHeader, setEditingHeader] = useState({ row: null, col: null });
   const [headerText, setHeaderText] = useState("");
+  const [target, setTarget] = useState({row: null, col: null});
 
   const onDragEnd = (result) => {
     console.log("Drag Result:", result);
@@ -189,6 +214,135 @@ const Grid = () => {
     reader.readAsText(file);
   };
 
+
+  // Add a new row
+  const addRow = (index) => {
+    console.log("addRow", index);
+    
+    const newRows = [...rows];
+    newRows.splice(index, 0, ""); // Insert the new column at the given index
+    setRows(newRows);
+
+    // Shift existing notes first
+    const updatedNotes = {};
+    Object.keys(notes).forEach((key) => {
+        const [row, col] = key.split("-").map(Number);
+        if (row >= index) {
+            updatedNotes[`${row + 1}-${col}`] = notes[key]; // Shift right
+        } else {
+            updatedNotes[key] = notes[key]; // Keep as is
+        }
+    });
+
+    // Now initialize empty cells for the new row
+    rows.forEach((colIndex, _) => {
+        const newCellKey = `${index}-${colIndex}`;
+        updatedNotes[newCellKey] = []; // Add empty cell at the new column
+    });
+
+    setNotes(updatedNotes);
+    setEditingHeader({ row: index, col: null });
+    setHeaderText("");
+  };
+
+  // Add a new column
+  const addColumn = (index) => {
+    console.log("addColumn", index);
+    
+    const newCols = [...cols];
+    newCols.splice(index, 0, ""); // Insert the new column at the given index
+    setCols(newCols);
+
+    // Shift existing notes first
+    const updatedNotes = {};
+    Object.keys(notes).forEach((key) => {
+        const [row, col] = key.split("-").map(Number);
+        if (col >= index) {
+            updatedNotes[`${row}-${col + 1}`] = notes[key]; // Shift right
+        } else {
+            updatedNotes[key] = notes[key]; // Keep as is
+        }
+    });
+
+    // Now initialize empty cells for the new column
+    rows.forEach((_, rowIndex) => {
+        const newCellKey = `${rowIndex}-${index}`;
+        updatedNotes[newCellKey] = []; // Add empty cell at the new column
+    });
+
+    setNotes(updatedNotes);
+    setEditingHeader({ row: null, col: index });
+    setHeaderText("");
+  };
+
+  function isRowDeleteDisabled(rowIndex) {
+    console.log(rowIndex)
+    const rowKeyPrefix = `${rowIndex}-`;
+    const rowlHasNotes = Object.keys(notes).some(
+      key => key.startsWith(rowKeyPrefix) && notes[key].length > 0
+    );
+    return rowlHasNotes;
+  }  
+
+  // Remove Row
+  const removeRow = (rowIndex) => {
+    const rowKeyPrefix = `${rowIndex}-`;
+    const rowHasNotes = Object.keys(notes).some(key => key.startsWith(rowKeyPrefix) && notes[key].length > 0);
+
+    if (!rowHasNotes) {
+      const newRows = rows.filter((_, index) => index !== rowIndex);
+      const newNotes = Object.fromEntries(
+        Object.entries(notes).filter(([key]) => !key.startsWith(rowKeyPrefix))
+      );
+      setRows(newRows);
+      setNotes(newNotes);
+    } else {
+      alert("Cannot remove row with notes.");
+    }
+  };
+
+  function isColumnDeleteDisabled(colIndex) {
+    console.log(colIndex)
+    const colKeyPrefix = `-${colIndex}`;
+    const colHasNotes = Object.keys(notes).some(
+      key => key.endsWith(colKeyPrefix) && notes[key].length > 0
+    );
+    return colHasNotes;
+  }
+
+  // Remove Column
+  const removeColumn = (colIndex) => {
+    const colKeyPrefix = `-${colIndex}`;
+    const colHasNotes = Object.keys(notes).some(
+      key => key.endsWith(colKeyPrefix) && notes[key].length > 0
+    );
+  
+    if (!colHasNotes) {
+      // Remove column from `cols` array
+      const newCols = cols.filter((_, index) => index !== colIndex);
+  
+      // Create a new notes object with shifted keys
+      const updatedNotes = {};
+      Object.entries(notes).forEach(([key, value]) => {
+        const [row, col] = key.split("-").map(Number);
+  
+        if (col < colIndex) {
+          // Keep notes in columns before the deleted column
+          updatedNotes[key] = value;
+        } else if (col > colIndex) {
+          // Shift columns after the deleted one to the left
+          updatedNotes[`${row}-${col - 1}`] = value;
+        }
+      });
+  
+      setNotes(updatedNotes);
+      setCols(newCols);
+    } else {
+      alert("Cannot remove column with notes.");
+    }
+  };
+  
+
   return (
     <div>
       <button onClick={saveToJSON}>Save Notes</button>
@@ -197,6 +351,9 @@ const Grid = () => {
         accept=".json"
         onChange={(e) => loadFromJSON(e.target.files[0])}
       />
+      <button onClick={addRow}>Add Row</button>
+      <button onClick={addColumn}>Add Column</button>
+
       <DragDropContext onDragEnd={onDragEnd}>
         <div
           className="grid-container"
@@ -206,12 +363,13 @@ const Grid = () => {
             cols.map((col, colIndex) => {
               const cellKey = `${rowIndex}-${colIndex}`;
 
-              if (rowIndex === 0) {
+              if ((rowIndex === 0) && (colIndex > 0)) {
                 // Column headers
                 return (
                   <div
                     className="column-header-cell"
                     onDoubleClick={() => handleHeaderDoubleClick(rowIndex, colIndex, false)}
+                    onContextMenu={(event) => handleContextMenu(event, rowIndex, colIndex)}
                   >
                     {editingHeader.col === colIndex ? (
                       <input
@@ -224,6 +382,13 @@ const Grid = () => {
                     ) : (
                       col
                     )}
+
+                    <Menu id={MENU_ID_COLUMN}>
+                      <Item id="insert_col_left" onClick={() => addColumn(target.col)}>Insert column to left</Item>
+                      <Item id="insert_col_right" onClick={() => addColumn(target.col+1)}>Insert column to right</Item>
+                      <Separator />
+                      <Item id="delete" disabled={() => isColumnDeleteDisabled(target.col)} onClick={() => removeColumn(target.col)}>Delete</Item>
+                    </Menu>
                   </div>
                 );
               }
@@ -234,6 +399,7 @@ const Grid = () => {
                   <div
                     className="row-header-cell"
                     onDoubleClick={() => handleHeaderDoubleClick(rowIndex, colIndex, true)}
+                    onContextMenu={(event) => handleContextMenu(event, rowIndex, colIndex)}
                   >
                     {editingHeader.row === rowIndex ? (
                       <input
@@ -246,6 +412,13 @@ const Grid = () => {
                     ) : (
                       row
                     )}
+
+                    <Menu id={MENU_ID_ROW}>
+                      <Item id="insert_row_above" onClick={() => addRow(target.row)}>Insert row above</Item>
+                      <Item id="insert_row_below" onClick={() => addRow(target.row+1)}>Insert row below</Item>
+                      <Separator />
+                      <Item id="delete" disabled={() => isRowDeleteDisabled(target.row)} onClick={() => removeRow(target.col)}>Delete</Item>
+                    </Menu>
                   </div>
                 );
               }
