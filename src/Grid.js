@@ -351,8 +351,6 @@ const Grid = () => {
         accept=".json"
         onChange={(e) => loadFromJSON(e.target.files[0])}
       />
-      <button onClick={addRow}>Add Row</button>
-      <button onClick={addColumn}>Add Column</button>
 
       <DragDropContext onDragEnd={onDragEnd}>
         <div
