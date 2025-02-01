@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown"
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { Menu, Item, Separator, Submenu, useContextMenu } from 'react-contexify';
 import 'react-contexify/ReactContexify.css';
 import './Grid.css';
