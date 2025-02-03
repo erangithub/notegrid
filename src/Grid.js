@@ -8,20 +8,100 @@ import './Grid.css';
 const MENU_ID_COLUMN = 'menu_col';
 const MENU_ID_ROW = 'menu_row';
 
-
-const newNote = (text) => {
-  const id = `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  return { id: id, text: text }
-}
-
 const Grid = () => {
   const [rows, setRows] = useState(["", "Todo", "People", "Topic 1", "Topic 2"]);
   const [cols, setCols] = useState(["", "Alice", "Bob", "Charlie", "Diana"]);
 
-  const [notes, setNotes] = useState({
-    "1-1": [newNote("Note 1"), newNote("Note 2")],
-    "2-3": [newNote("Vacation Note")],
-  });
+  const [notesState, setNotesState] = useState ( {notes: { }, cells: {} });
+
+  const getCellId = (row, col) => `${row}-${col}`;
+
+  const newNote = (text, cellId) => {
+    const creationDate = Date.now();
+    const id = `note-${creationDate}-${Math.random().toString(36).substr(2, 9)}`;
+    const note = { id, creationDate, text, parentId: cellId };
+  
+    // Updating the notes and cells state together
+    setNotesState((prevNotes) => {
+      const newNotes = { ...prevNotes.notes, [id]: note };
+  
+      // Update cells with the new note
+      const newCells = {
+        ...prevNotes.cells,
+        [cellId]: [...(prevNotes.cells[cellId] || []), id], // Add the note to the specified cell
+      };
+  
+      console.log("newNotes", newNotes);
+
+      return {
+        notes: newNotes,
+        cells: newCells,
+      };
+    });
+  
+    
+    return note;
+  };
+
+  const placeNotesInCell = (noteIds, cellId, index = undefined) => {
+    setNotesState((prevNotes) => {
+      var { notes, cells } = prevNotes;
+      for (let idx = noteIds.length-1; idx >= 0; idx--) {
+        const noteId = noteIds[idx];
+
+        var note = notes[noteId];
+
+        // Get the current notes in the parent cell
+        const prevCellId = note.parentId;
+        const prevCellNotes = (cells[prevCellId] || []);
+        console.log("prevCellNotes", noteId, notes, cells);
+        
+        const oldIndex = prevCellNotes.length ? prevCellNotes.indexOf(noteId) : -1;
+        console.log("oldIndex", oldIndex);
+    
+        // Step 1: Remove from old cell (if it exists)
+        const updatedOldCellNotes = [...prevCellNotes];
+        
+        console.log("updatedOldCellNotes", updatedOldCellNotes)
+        if (oldIndex !== -1) updatedOldCellNotes.splice(oldIndex, 1);
+        console.log("updatedOldCellNotes", prevCellId, updatedOldCellNotes)
+        // If cellId is undefined, we're just removing the note
+        if (!cellId) {
+          return {
+            ...prevNotes,
+            cells: {
+              ...cells,
+              [prevCellId]: updatedOldCellNotes,
+            },
+          };
+        }
+
+        // Step 2: Add to new cell
+        const newCellNotes = prevCellId === cellId ? updatedOldCellNotes : [...(cells[cellId] || [])];
+        const insertIndex = index !== undefined ? index : newCellNotes.length;
+        newCellNotes.splice(insertIndex, 0, note.id);
+    
+        // Step 3: Update the parentId of the note (after moving it)
+        console.log("cellid", cellId)
+        
+        note.parentId = cellId;
+        cells = {
+          ...cells,
+          [prevCellId]: updatedOldCellNotes,
+          [cellId]: newCellNotes, 
+        };
+        notes = {
+          ...notes,
+          [note.id]: note, // Update the note’s parentId in the notes state
+        };
+      };
+      return {
+        ...prevNotes,
+        cells: cells,
+        notes: notes
+      };
+    });
+  };
 
   const { show, hideAll } = useContextMenu({
     id: "menuId",
@@ -47,31 +127,26 @@ const Grid = () => {
   const [headerText, setHeaderText] = useState("");
   const [target, setTarget] = useState({row: null, col: null});
 
+  const [selection, setSelection] = useState([])
+  const [draggedNote, setDraggedNote] = useState("")
+
+  const onDragStart = (item) => {
+    console.log("Item", item);
+    setDraggedNote(item.draggableId);
+  }
+
   const onDragEnd = (result) => {
-    console.log("Drag Result:", result);
+    setDraggedNote("")
     if (!result.destination) return;
 
     const { source, destination } = result;
-    const sourceKey = source.droppableId;
-    const destinationKey = destination.droppableId;
-
-    if (sourceKey === destinationKey) {
-      const sourceNotes = Array.from(notes[sourceKey]);
-      const [removed] = sourceNotes.splice(source.index, 1);
-      sourceNotes.splice(destination.index, 0, removed);
-      setNotes({ ...notes, [sourceKey]: sourceNotes });
+    
+    if (selection.length) {
+      placeNotesInCell(selection, destination.droppableId, destination.index);
     } else {
-      const sourceNotes = Array.from(notes[sourceKey] || []);
-      const [removed] = sourceNotes.splice(source.index, 1);
-      const destinationNotes = Array.from(notes[destinationKey] || []);
-
-      destinationNotes.splice(destination.index, 0, removed);
-      setNotes({
-        ...notes,
-        [sourceKey]: sourceNotes,
-        [destinationKey]: destinationNotes,
-      });
+      placeNotesInCell([draggedNote], destination.droppableId, destination.index);
     }
+    setSelection([]);
   };
 
   const textareaRef = useRef(null);
@@ -85,13 +160,7 @@ const Grid = () => {
   }, [editingNoteId, editText]); // Runs when editing state or text content changes
 
   const handleDoubleClick = (cellKey) => {
-    const newNoteObj = newNote("");
-  
-    setNotes((prevNotes) => ({
-      ...prevNotes,
-      [cellKey]: [...(prevNotes[cellKey] || []), newNoteObj],
-    }));
-  
+    const newNoteObj = newNote("", cellKey);
     setEditingNoteId(newNoteObj.id);
     setEditText(newNoteObj.text);
   };
@@ -126,9 +195,7 @@ const Grid = () => {
   };
 
   const handleHeaderKeyDown = (e) => {
-    if (e.key === "Escape") {
-      setEditingHeader({ row: null, col: null }); // Exit edit mode without saving
-    } else if (e.key === "Enter" ) {
+    if (e.key === "Escape" || e.key === "Enter") {
       handleHeaderBlur(); // Save and exit edit mode
     }
   };
@@ -136,6 +203,22 @@ const Grid = () => {
   const handleNoteDoubleClick = (note) => {
     setEditingNoteId(note.id);
     setEditText(note.text);
+  };
+
+  const handleNoteClick = (note, event) => {    
+    const isCtrlPressed = event.ctrlKey || event.metaKey; // Detect Ctrl (Windows/Linux) or Cmd (Mac)
+    
+    setSelection((prevSelection) => {
+      if (isCtrlPressed) {
+        // Toggle selection without overriding previous selection
+        return prevSelection.includes(note.id)
+          ? prevSelection.filter(id => id !== note.id) // Deselect if already selected
+          : [...prevSelection, note.id]; // Add to selection
+      } else {
+        // Single selection mode (no Ctrl)
+        return prevSelection.includes(note.id) ? [] : [note.id];
+      }
+    });
   };
 
   const handleChange = (e) => {
@@ -146,27 +229,18 @@ const Grid = () => {
     if (editingNoteId) {
       if (editText.trim() === "") {
         // Remove the note if it's empty
-        setNotes((prevNotes) => {
-          const updatedNotes = { ...prevNotes };
-          for (const key in updatedNotes) {
-            updatedNotes[key] = updatedNotes[key].filter(note => note.id !== editingNoteId);
-            // If the cell has no more notes, remove the key entirely
-            if (updatedNotes[key].length === 0) {
-              delete updatedNotes[key];
-            }
-          }
-          return updatedNotes;        
-        });
+        placeNotesInCell([editingNoteId], null);
       } else {
-        setNotes((prevNotes) => {
-          const updatedNotes = { ...prevNotes };
-          for (const key in updatedNotes) {
-            updatedNotes[key] = updatedNotes[key].map((note) =>
-              note.id === editingNoteId ? { ...note, text: editText } : note
-            );
+        setNotesState((prevNotes) => ({
+          ...prevNotes,
+          notes: {
+            ...prevNotes.notes,
+            [editingNoteId]: {
+              ...prevNotes.notes[editingNoteId], // Keep other properties of the note unchanged
+              text: editText, // Update the text
+            },
           }
-          return updatedNotes;
-        });
+        }));
       }
       setEditingNoteId(null);
     }
@@ -174,7 +248,7 @@ const Grid = () => {
 
   const handleKeyDown = (e) => {
     if (e.key === "Escape") {
-      setEditingNoteId(null); // Exit edit mode without saving
+      handleBlur();
     } else if (e.key === "Enter" && e.ctrlKey) {
       handleBlur(); // Save and exit edit mode
     }
@@ -184,7 +258,7 @@ const Grid = () => {
     const data = {
       rows: rows,  // Include the row names
       cols: cols,  // Include the column names
-      notes: notes, // Include the note data
+      notes: notesState, // Include the note data
     };
 
     const jsonData = JSON.stringify(data, null, 2);
@@ -205,7 +279,7 @@ const Grid = () => {
         const loadedData = JSON.parse(reader.result);
         setRows(loadedData.rows);  // Restore the row headers
         setCols(loadedData.cols);  // Restore the column headers
-        setNotes(loadedData.notes);  // Restore the notes
+        setNotesState(loadedData.notes);  // Restore the notes
       } catch (error) {
         console.error('Error loading JSON:', error);
         alert('Failed to load JSON. Please make sure the file is valid.');
@@ -225,22 +299,23 @@ const Grid = () => {
 
     // Shift existing notes first
     const updatedNotes = {};
-    Object.keys(notes).forEach((key) => {
+    Object.keys(notesState).forEach((key) => {
         const [row, col] = key.split("-").map(Number);
         if (row >= index) {
-            updatedNotes[`${row + 1}-${col}`] = notes[key]; // Shift right
+            updatedNotes[getCellId(row+1, col)] = notesState[key]; // Shift right
         } else {
-            updatedNotes[key] = notes[key]; // Keep as is
+            updatedNotes[key] = notesState[key]; // Keep as is
         }
     });
 
     // Now initialize empty cells for the new row
     rows.forEach((colIndex, _) => {
-        const newCellKey = `${index}-${colIndex}`;
+        const newCellKey = getCellId(index, colIndex);
         updatedNotes[newCellKey] = []; // Add empty cell at the new column
     });
 
-    setNotes(updatedNotes);
+    // TODO
+    //setNotes(updatedNotes);
     setEditingHeader({ row: index, col: null });
     setHeaderText("");
   };
@@ -255,22 +330,23 @@ const Grid = () => {
 
     // Shift existing notes first
     const updatedNotes = {};
-    Object.keys(notes).forEach((key) => {
+    Object.keys(notesState).forEach((key) => {
         const [row, col] = key.split("-").map(Number);
         if (col >= index) {
-            updatedNotes[`${row}-${col + 1}`] = notes[key]; // Shift right
+            updatedNotes[getCellId(row, col+1)] = notesState[key]; // Shift right
         } else {
-            updatedNotes[key] = notes[key]; // Keep as is
+            updatedNotes[key] = notesState[key]; // Keep as is
         }
     });
 
     // Now initialize empty cells for the new column
     rows.forEach((_, rowIndex) => {
-        const newCellKey = `${rowIndex}-${index}`;
+        const newCellKey = getCellId(rowIndex, index);
         updatedNotes[newCellKey] = []; // Add empty cell at the new column
     });
 
-    setNotes(updatedNotes);
+    // TODO
+    //setNotes(updatedNotes);
     setEditingHeader({ row: null, col: index });
     setHeaderText("");
   };
@@ -278,8 +354,8 @@ const Grid = () => {
   function isRowDeleteDisabled(rowIndex) {
     console.log(rowIndex)
     const rowKeyPrefix = `${rowIndex}-`;
-    const rowlHasNotes = Object.keys(notes).some(
-      key => key.startsWith(rowKeyPrefix) && notes[key].length > 0
+    const rowlHasNotes = Object.keys(notesState).some(
+      key => key.startsWith(rowKeyPrefix) && notesState[key].length > 0
     );
     return rowlHasNotes;
   }  
@@ -287,15 +363,16 @@ const Grid = () => {
   // Remove Row
   const removeRow = (rowIndex) => {
     const rowKeyPrefix = `${rowIndex}-`;
-    const rowHasNotes = Object.keys(notes).some(key => key.startsWith(rowKeyPrefix) && notes[key].length > 0);
+    const rowHasNotes = Object.keys(notesState).some(key => key.startsWith(rowKeyPrefix) && notesState[key].length > 0);
 
     if (!rowHasNotes) {
       const newRows = rows.filter((_, index) => index !== rowIndex);
       const newNotes = Object.fromEntries(
-        Object.entries(notes).filter(([key]) => !key.startsWith(rowKeyPrefix))
+        Object.entries(notesState).filter(([key]) => !key.startsWith(rowKeyPrefix))
       );
       setRows(newRows);
-      setNotes(newNotes);
+      //TODO
+      //setNotes(newNotes);
     } else {
       alert("Cannot remove row with notes.");
     }
@@ -304,8 +381,8 @@ const Grid = () => {
   function isColumnDeleteDisabled(colIndex) {
     console.log(colIndex)
     const colKeyPrefix = `-${colIndex}`;
-    const colHasNotes = Object.keys(notes).some(
-      key => key.endsWith(colKeyPrefix) && notes[key].length > 0
+    const colHasNotes = Object.keys(notesState).some(
+      key => key.endsWith(colKeyPrefix) && notesState[key].length > 0
     );
     return colHasNotes;
   }
@@ -313,8 +390,8 @@ const Grid = () => {
   // Remove Column
   const removeColumn = (colIndex) => {
     const colKeyPrefix = `-${colIndex}`;
-    const colHasNotes = Object.keys(notes).some(
-      key => key.endsWith(colKeyPrefix) && notes[key].length > 0
+    const colHasNotes = Object.keys(notesState).some(
+      key => key.endsWith(colKeyPrefix) && notesState[key].length > 0
     );
   
     if (!colHasNotes) {
@@ -323,7 +400,7 @@ const Grid = () => {
   
       // Create a new notes object with shifted keys
       const updatedNotes = {};
-      Object.entries(notes).forEach(([key, value]) => {
+      Object.entries(notesState).forEach(([key, value]) => {
         const [row, col] = key.split("-").map(Number);
   
         if (col < colIndex) {
@@ -331,18 +408,157 @@ const Grid = () => {
           updatedNotes[key] = value;
         } else if (col > colIndex) {
           // Shift columns after the deleted one to the left
-          updatedNotes[`${row}-${col - 1}`] = value;
+          updatedNotes[getCellId(row, col-1)] = value;
         }
       });
   
-      setNotes(updatedNotes);
+      //TODO
+      //setNotes(updatedNotes);
       setCols(newCols);
     } else {
       alert("Cannot remove column with notes.");
     }
   };
   
+  const ColumnHeader = (colText, colIndex) => {
+    return (
+      <div
+        className="column-header-cell"
+        onDoubleClick={() => handleHeaderDoubleClick(0, colIndex, false)}
+        onContextMenu={(event) => handleContextMenu(event, 0, colIndex)}
+        key={`col_header${colIndex}`}
+      >
+        {editingHeader.col === colIndex ? (
+          <input
+            value={headerText}
+            onChange={handleHeaderChange}
+            onBlur={handleHeaderBlur}
+            onKeyDown={handleHeaderKeyDown}
+            autoFocus
+          />
+        ) : (
+          colText
+        )}
 
+        <Menu id={MENU_ID_COLUMN}>
+          <Item id="insert_col_left" onClick={() => addColumn(target.col)}>Insert column to left</Item>
+          <Item id="insert_col_right" onClick={() => addColumn(target.col+1)}>Insert column to right</Item>
+          <Separator />
+          <Item id="delete" disabled={() => isColumnDeleteDisabled(target.col)} onClick={() => removeColumn(target.col)}>Delete</Item>
+        </Menu>
+      </div>
+    );
+  };
+
+  const RowHeader = (rowText, rowIndex) => {
+    return (
+      <div
+        className="row-header-cell"
+        onDoubleClick={() => handleHeaderDoubleClick(rowIndex, 0, true)}
+        onContextMenu={(event) => handleContextMenu(event, rowIndex, 0)}
+        key={`row_header_${rowIndex}`}
+      >
+        {editingHeader.row === rowIndex ? (
+          <input
+            value={headerText}
+            onChange={handleHeaderChange}
+            onBlur={handleHeaderBlur}
+            onKeyDown={handleHeaderKeyDown}
+            autoFocus
+          />
+        ) : (
+          rowText
+        )}
+      
+        
+        <Menu id={MENU_ID_ROW}>
+          <Item id="insert_row_above" onClick={() => addRow(target.row)}>Insert row above</Item>
+          <Item id="insert_row_below" onClick={() => addRow(target.row+1)}>Insert row below</Item>
+          <Separator />
+          <Item id="delete" disabled={() => isRowDeleteDisabled(target.row)} onClick={() => removeRow(target.col)}>Delete</Item>
+        </Menu>
+        
+      </div>
+    );
+  };
+
+  function isNoteSelected(note) {
+    return selection.includes(note.id);
+  }
+
+  const NoteUI = (note) => {
+    const style = isNoteSelected(note) ? {outline: "1px solid blue", outlineOffset: "-1px"}  : {border : "0px"};
+    const selectedCount = draggedNote ? selection.length : 0;
+  
+    if (draggedNote && isNoteSelected(note) && (note.id != draggedNote)) {
+      style.outline = "0px";
+      style.opacity = 0.5
+    }
+    
+    return (
+      <div>
+        {(draggedNote == note.id && (selectedCount > 1)) ? (<div className="drag-count">{selectedCount}</div>) : (<div/>)}
+      <div
+        className="note"
+        onDoubleClick={(e) => {
+          e.stopPropagation(); // Prevent triggering cell's double-click
+          handleNoteDoubleClick(note);
+        } }
+        onClick={(e) => {
+          e.stopPropagation();
+          if (note.id != editingNoteId) {
+            handleBlur();
+            handleNoteClick(note, e);
+          }
+        } }
+        style = {style}
+      >
+        {editingNoteId === note.id ? (
+          <textarea
+            ref={textareaRef}
+            type="text"
+            value={editText}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            autoFocus />
+        ) : (
+          <ReactMarkdown>{note.text}</ReactMarkdown>
+        )}
+      </div>
+      </div>);
+    }
+
+  const NotesCell = (rowIndex, colIndex) => {
+    const cellKey = getCellId(rowIndex, colIndex);
+    return (
+      <Droppable key={cellKey} droppableId={cellKey}>
+        {(provided) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className="droppable-cell"
+            onDoubleClick={() => handleDoubleClick(cellKey)}
+            key={cellKey}
+          >
+            {notesState.cells[cellKey]?.map((noteId, index) => (
+              <Draggable key={noteId} draggableId={noteId} index={index}>
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.draggableProps}
+                    {...provided.dragHandleProps}
+                  >
+                    {NoteUI(notesState.notes[noteId])}
+                  </div>
+                )}
+              </Draggable>
+            ))}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>)
+  };
   return (
     <div>
       <button onClick={saveToJSON}>Save Notes</button>
@@ -352,122 +568,21 @@ const Grid = () => {
         onChange={(e) => loadFromJSON(e.target.files[0])}
       />
 
-      <DragDropContext onDragEnd={onDragEnd}>
+      <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}> {
         <div
           className="grid-container"
           style={{ gridTemplateColumns: `repeat(${cols.length}, max-content)` }}
         >
           {rows.map((row, rowIndex) =>
-            cols.map((col, colIndex) => {
-              const cellKey = `${rowIndex}-${colIndex}`;
-
-              if ((rowIndex === 0) && (colIndex > 0)) {
-                // Column headers
-                return (
-                  <div
-                    className="column-header-cell"
-                    onDoubleClick={() => handleHeaderDoubleClick(rowIndex, colIndex, false)}
-                    onContextMenu={(event) => handleContextMenu(event, rowIndex, colIndex)}
-                  >
-                    {editingHeader.col === colIndex ? (
-                      <input
-                        value={headerText}
-                        onChange={handleHeaderChange}
-                        onBlur={handleHeaderBlur}
-                        onKeyDown={handleHeaderKeyDown}
-                        autoFocus
-                      />
-                    ) : (
-                      col
-                    )}
-
-                    <Menu id={MENU_ID_COLUMN}>
-                      <Item id="insert_col_left" onClick={() => addColumn(target.col)}>Insert column to left</Item>
-                      <Item id="insert_col_right" onClick={() => addColumn(target.col+1)}>Insert column to right</Item>
-                      <Separator />
-                      <Item id="delete" disabled={() => isColumnDeleteDisabled(target.col)} onClick={() => removeColumn(target.col)}>Delete</Item>
-                    </Menu>
-                  </div>
-                );
-              }
-          
-              if (colIndex === 0) {
-                // Row headers
-                return (
-                  <div
-                    className="row-header-cell"
-                    onDoubleClick={() => handleHeaderDoubleClick(rowIndex, colIndex, true)}
-                    onContextMenu={(event) => handleContextMenu(event, rowIndex, colIndex)}
-                  >
-                    {editingHeader.row === rowIndex ? (
-                      <input
-                        value={headerText}
-                        onChange={handleHeaderChange}
-                        onBlur={handleHeaderBlur}
-                        onKeyDown={handleHeaderKeyDown}
-                        autoFocus
-                      />
-                    ) : (
-                      row
-                    )}
-
-                    <Menu id={MENU_ID_ROW}>
-                      <Item id="insert_row_above" onClick={() => addRow(target.row)}>Insert row above</Item>
-                      <Item id="insert_row_below" onClick={() => addRow(target.row+1)}>Insert row below</Item>
-                      <Separator />
-                      <Item id="delete" disabled={() => isRowDeleteDisabled(target.row)} onClick={() => removeRow(target.col)}>Delete</Item>
-                    </Menu>
-                  </div>
-                );
-              }
-
-              return (
-                <Droppable key={cellKey} droppableId={cellKey}>
-                  {(provided) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className="droppable-cell"
-                      onDoubleClick={() => handleDoubleClick(cellKey)}
-                    >
-                      {notes[cellKey]?.map((note, index) => (
-                        <Draggable key={note.id} draggableId={note.id} index={index}>
-                          {(provided) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className="note"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation(); // Prevent triggering cell's double-click
-                                handleNoteDoubleClick(note);
-                              }}
-                            >
-                              {editingNoteId === note.id ? (
-                                <textarea
-                                  ref={textareaRef}
-                                  type="text"
-                                  value={editText}
-                                  onChange={handleChange}
-                                  onBlur={handleBlur}
-                                  onKeyDown={handleKeyDown}
-                                  autoFocus
-                                />
-                              ) : (
-                                <ReactMarkdown>{note.text}</ReactMarkdown>
-                              )}
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              );
+            cols.map((col, colIndex) => { <div/>
+              if (rowIndex === 0) return ColumnHeader(col, colIndex);
+              if (colIndex === 0) return RowHeader(row, rowIndex);
+              return NotesCell(rowIndex, colIndex);
+              
             })
           )}
         </div>
+      }
       </DragDropContext>
     </div>
   );

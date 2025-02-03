@@ -16,7 +16,7 @@
     background-color: #c2c2c2;
     position: sticky;
     top: 0;
-    z-index: 3
+    z-index: 1;
 }
 
 .grid-container .row-header-cell {
@@ -26,7 +26,6 @@
     background-color: #c2c2c2;
     position: sticky;
     left: 0;
-    z-index: 3
 }
 
 .grid-container .droppable-cell {
@@ -40,9 +39,26 @@
 
 .grid-container .note {
     background: #ffffab;
-    border: 1px solid #000;
     padding: 4px 4px;
-    margin: 4px 2px;
+    margin: 3px 2px;
     border-radius: 0px;
     cursor: grab;
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
+
+.grid-container .drag-count {
+    display:block;
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background-color: lightblue;  /* White foreground */
+    border-radius: 50%;  /* Makes it a circle */
+    top: -5px;
+    right: -5px;
+    transform: translate(-50%+2px, -50%+2px); /* Centers the circle on (0,0) */
+    z-index: 1; /* Makes sure it stays on top */
+    display: flex; /* Enables flexbox */
+    justify-content: center; /* Horizontally center the text */
+    align-items: center; /* Vertically center the text */
+    font-size: 10px; /* Optional, adjust font size */
+  }
