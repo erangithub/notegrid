@@ -33,7 +33,6 @@
     padding: 1px;
     border-radius: 0px;
     background-color: #ffffff;
-    position: relative;
     min-width: 50px;
 }
 
@@ -41,9 +40,12 @@
     background: #ffffab;
     padding: 4px 4px;
     margin: 3px 2px;
-    border-radius: 0px;
+    border-radius: 3px;
     cursor: grab;
     box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+    font-size: clamp(10px, 2vw, 14px);
+    max-width: 200px;
+    text-align: left;
 }
 
 .grid-container .drag-count {
