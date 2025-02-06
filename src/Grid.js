@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import rehypeRaw from 'rehype-raw';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { Menu, Item, Separator, Submenu, useContextMenu } from 'react-contexify';
 import 'react-contexify/ReactContexify.css';
@@ -485,7 +490,24 @@ const Grid = () => {
             onKeyDown={handleKeyDown}
             autoFocus />
         ) : (
-          <ReactMarkdown>{displayText}</ReactMarkdown>
+          <ReactMarkdown children={displayText} remarkPlugins={[remarkGfm]} 
+            rehypePlugins={[rehypeRaw]} 
+            components={{
+              code({ node, inline, className, children, ...props }: any) {
+                const match = /language-(\w+)/.exec(className || '');
+      
+                return !inline && match ? (
+                  <SyntaxHighlighter style={dracula} PreTag="div" language={match[1]} {...props}>
+                    {String(children).replace(/\n$/, '')}
+                  </SyntaxHighlighter>
+                ) : (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              },
+            }}
+            autofocus/>
         )}
         {isEditing && tags.length > 0 ? 
             (<div style={{ color: "#555", marginLeft: "0px", wordwrap:"break-word", fontSize:8 }}>tags: {tags.join(" ")}</div>)
