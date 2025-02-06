@@ -2,8 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeRaw from 'rehype-raw';
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css"; // Import KaTeX styles
+
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import "react-data-grid/lib/styles.css";
+
 
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { Menu, Item, Separator, Submenu, useContextMenu } from 'react-contexify';
@@ -490,8 +496,8 @@ const Grid = () => {
             onKeyDown={handleKeyDown}
             autoFocus />
         ) : (
-          <ReactMarkdown children={displayText} remarkPlugins={[remarkGfm]} 
-            rehypePlugins={[rehypeRaw]} 
+          <ReactMarkdown children={displayText} remarkPlugins={[remarkGfm, remarkMath]} 
+            rehypePlugins={[rehypeRaw, rehypeKatex]} 
             components={{
               code({ node, inline, className, children, ...props }: any) {
                 const match = /language-(\w+)/.exec(className || '');
