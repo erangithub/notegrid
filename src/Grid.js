@@ -483,7 +483,6 @@ const Grid = () => {
       style.opacity = 0.5
     }
     
-    
     const isEditing = note.id === editingNoteId;
     const tags = extractTags(isEditing ? editText : note.text);
     const displayText = isEditing ? note.text : removeTagsFromText(note.text);
@@ -521,6 +520,7 @@ const Grid = () => {
             onChange={handleChange}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
+            style={{position:"relative", minWidth:"300px"}}
             autoFocus />
         ) : (
           <ReactMarkdown children={displayText} remarkPlugins={[remarkGfm, remarkMath]} 
