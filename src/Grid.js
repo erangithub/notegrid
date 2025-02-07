@@ -147,6 +147,7 @@ const Grid = () => {
 
   const [selection, setSelection] = useState([])
   const [draggedNote, setDraggedNote] = useState("")
+  const [colWidths, setColWidths] = useState(cols.map(() => 150)); // Default width
 
   const onDragStart = (item) => {
     console.log("Item", item);
@@ -177,6 +178,9 @@ const Grid = () => {
     }
   }, [editingNoteId, editText]); // Runs when editing state or text content changes
 
+  useEffect( () => {
+    console.log(colWidths)
+  }, [colWidths])
   const handleDoubleClick = (cellKey) => {
     const newNoteObj = newNote("", cellKey);
     setEditingNoteId(newNoteObj.id);
@@ -361,14 +365,34 @@ const Grid = () => {
   const removeColumn = (colIndex) => {
     setCols((prevColumns) => prevColumns.filter((_, i) => i !== colIndex));
   };
-  
+
+  const handleColResizeMouseDown = (e, index) => {
+    const startX = e.clientX;
+    const startWidth = colWidths[index];
+
+    const handleMouseMove = (moveEvent) => {
+        const newWidth = Math.max(50, startWidth + (moveEvent.clientX - startX));
+        setColWidths((prev) => prev.map((w, i) => (i === index ? newWidth : w)));
+    };
+
+    const handleMouseUp = () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
   const ColumnHeader = (colText, colIndex) => {
+    const cellKey = getCellId(0, colIndex);
     return (
       <div
         className="column-header-cell"
         onDoubleClick={() => handleHeaderDoubleClick(0, colIndex, false)}
         onContextMenu={(event) => handleHeaderContextMenu(event, 0, colIndex)}
-        key={`col_header${colIndex}`}
+        key={cellKey}
+        style={{ width: `${colWidths[colIndex]}px` }}
       >
         {editingHeader.colIndex === colIndex ? (
           <input
@@ -379,7 +403,10 @@ const Grid = () => {
             autoFocus
           />
         ) : (
-          colText
+          <>
+            {colText}
+            <div className="col-resize-handle" onMouseDown={(e) => handleColResizeMouseDown(e, colIndex)} />
+          </>
         )}
 
         <Menu id={MENU_ID_COLUMN}>
@@ -464,12 +491,12 @@ const Grid = () => {
     if (tags.includes("#todo")) {
       style.backgroundColor = "lightgreen"
     } else if (tags.includes("#fyi")) {
-        style.backgroundColor = "white"
+      style.backgroundColor = "white"
     }
 
     return (
       <div>
-        {(draggedNote == note.id && (selectedCount > 1)) ? (<div className="drag-count">{selectedCount}</div>) : (<div/>)}
+        {(draggedNote == note.id && (selectedCount > 1)) ? (<div className="drag-count">{selectedCount}</div>) : (<></>)}
       <div
         className="note"
         onDoubleClick={(e) => {
@@ -484,7 +511,7 @@ const Grid = () => {
           }
         } }
         style={style}
-        onContextMenu={(event) => {if (!isEditing) {handleNoteContextMenu(event, note.id)}}}
+        onContextMenu={(event) => {if (!isEditing) {handleNoteContextMenu(event, note.id)}}}  
       >
         {isEditing ? (
           <textarea
@@ -517,7 +544,7 @@ const Grid = () => {
         )}
         {isEditing && tags.length > 0 ? 
             (<div style={{ color: "#555", marginLeft: "0px", wordwrap:"break-word", fontSize:8 }}>tags: {tags.join(" ")}</div>)
-            : (<div/>)
+            : (<></>)
         }
       </div>
       </div>);
@@ -535,6 +562,7 @@ const Grid = () => {
             onDoubleClick={() => handleDoubleClick(cellKey)}
             onClick={() => setSelection([])}
             key={cellKey}
+            style={{ width: `${colWidths[colIndex]}px`}}
           >
             {notesState.cells[cellKey]?.map((noteId, index) => (
               <Draggable key={noteId} draggableId={noteId} index={index}>
@@ -570,7 +598,7 @@ const Grid = () => {
           style={{ gridTemplateColumns: `repeat(${cols.length}, max-content)` }}
         >
           {rows.map((row, rowIndex) =>
-            cols.map((col, colIndex) => { <div/>
+            cols.map((col, colIndex) => { 
               if (rowIndex === 0) return ColumnHeader(col.title, colIndex);
               if (colIndex === 0) return RowHeader(row.title, rowIndex);
               return NotesCell(rowIndex, colIndex);

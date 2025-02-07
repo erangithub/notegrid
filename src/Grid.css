@@ -11,12 +11,13 @@
 
 .grid-container .column-header-cell {
     border: 0.5px solid #000;
-    padding: 8px;
+    padding: 4px;
     border-radius: 0px;
     background-color: #c2c2c2;
     position: sticky;
     top: 0;
     z-index: 1;
+    min-width: 50px;
 }
 
 .grid-container .row-header-cell {
@@ -28,9 +29,21 @@
     left: 0;
 }
 
+.col-resize-handle {
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 1;
+    background-color: yellow;
+}
+
 .grid-container .droppable-cell {
     border: 0.5px solid #000000;
-    padding: 1px;
+    padding: 4px;
     border-radius: 0px;
     background-color: #ffffff;
     min-width: 50px;
@@ -44,7 +57,6 @@
     cursor: grab;
     box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
     font-size: clamp(10px, 2vw, 14px);
-    max-width: 200px;
     text-align: left;
 }
 
