@@ -386,20 +386,23 @@ const Grid = () => {
 
   const ColumnHeader = (colText, colIndex) => {
     const cellKey = getCellId(0, colIndex);
+    const isEditing = editingHeader.colIndex === colIndex;
+    const position = isEditing ? "relative" : "sticky";
     return (
       <div
         className="column-header-cell"
         onDoubleClick={() => handleHeaderDoubleClick(0, colIndex, false)}
         onContextMenu={(event) => handleHeaderContextMenu(event, 0, colIndex)}
         key={cellKey}
-        style={{ width: `${colWidths[colIndex]}px` }}
+        style={{ position: `${position}`, width: `${colWidths[colIndex]}px` }}
       >
-        {editingHeader.colIndex === colIndex ? (
+        {isEditing ? (
           <input
             value={headerText}
             onChange={handleHeaderChange}
             onBlur={handleHeaderBlur}
             onKeyDown={handleHeaderKeyDown}
+            style={{position:"absolute", minWidth:"200px", zIndex:"1"}}
             autoFocus
           />
         ) : (
@@ -420,19 +423,23 @@ const Grid = () => {
   };
 
   const RowHeader = (rowText, rowIndex) => {
+    const isEditing = editingHeader.rowIndex === rowIndex;
+    const position = isEditing ? "relative" : "sticky";
     return (
       <div
         className="row-header-cell"
         onDoubleClick={() => handleHeaderDoubleClick(rowIndex, 0, true)}
         onContextMenu={(event) => handleHeaderContextMenu(event, rowIndex, 0)}
         key={`row_header_${rowIndex}`}
+        style={{position:`${position}`, minHeight:"20px"}}
       >
-        {editingHeader.rowIndex === rowIndex ? (
+        {isEditing ? (
           <input
             value={headerText}
             onChange={handleHeaderChange}
             onBlur={handleHeaderBlur}
             onKeyDown={handleHeaderKeyDown}
+            style={{position:"absolute", zIndex:"1", minWidth:"200px"}}
             autoFocus
           />
         ) : (
