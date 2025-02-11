@@ -85,7 +85,7 @@ const Grid = () => {
 
   const newNote = (text, rowIndex, colIndex) => {
     const creationDate = Date.now();
-    const id = `note-${creationDate}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = `N${Math.random().toString(36).substr(2, 9)}`;
     const textWithHeaderTags = addTagsToText(text, rows[rowIndex].tags.concat(cols[colIndex].tags));
     const note = { id: id, createDate: creationDate, text: textWithHeaderTags, order: 0 };
   
