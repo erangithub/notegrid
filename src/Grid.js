@@ -497,6 +497,10 @@ const Grid = () => {
     document.addEventListener("mouseup", handleMouseUp);
   };
 
+  const CornerCell = () => {
+    return (<div className="corner-cell" key="corner"></div>)
+  };
+
   const ColumnHeader = (colText, colIndex) => {
     const cellKey = getCellId(0, colIndex);
     const isEditing = editingHeader.colIndex === colIndex;
@@ -747,7 +751,11 @@ const Grid = () => {
         >
           {rows.map((row, rowIndex) =>
             cols.map((col, colIndex) => { 
-              if (rowIndex === 0) return ColumnHeader(removeAllTagsFromText(col.title), colIndex);
+              if (rowIndex === 0) {
+                if (colIndex === 0)
+                  return CornerCell();
+                return ColumnHeader(removeAllTagsFromText(col.title), colIndex);
+              }
               if (colIndex === 0) return RowHeader(removeAllTagsFromText(row.title), rowIndex);
               return NotesCell(rowIndex, colIndex);
             })
