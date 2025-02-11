@@ -168,12 +168,22 @@ const Grid = () => {
     let afterIndex = null, beforeIndex = null;
     let numOtherNotesInCell = 0;
 
-    cellNotes.forEach((note, idx) => {
-        if (draggedNoteIds.has(note.id)) return; // Ignore dragged notes
-        if (idx < targetIndex) afterIndex = idx;
-        if (beforeIndex === null && idx >= targetIndex) beforeIndex = idx;
-        numOtherNotesInCell++;
-    });
+    const draggedNoteId = draggedNoteInst.split(" ")[0];
+
+    for (let idx = 0; idx < cellNotes.length; idx++) {
+      if (cellNotes[idx].id == draggedNoteId) {
+        targetIndex++;
+      }
+      if (draggedNoteIds.has(cellNotes[idx].id)) continue;
+      if (idx < targetIndex) {
+        afterIndex = idx;
+      }
+      else if (beforeIndex == null) {
+        beforeIndex = idx;
+      }
+
+      numOtherNotesInCell++;
+    }
 
     return { afterIndex, beforeIndex, numOtherNotesInCell };
   };
@@ -706,7 +716,7 @@ const Grid = () => {
             {...provided.droppableProps}
             className="droppable-cell"
             onDoubleClick={() => handleNoteCellDoubleClick(rowIndex, colIndex)}
-            onClick={() => { setSelection([]); }}
+            onClick={() => { if (draggedNoteInst == "") setSelection([]); }}
             key={cellId}
             style={{ width: `${cols[colIndex].size}px`}}
           >
