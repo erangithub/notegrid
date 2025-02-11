@@ -71,7 +71,7 @@ const addTagsToText = (text, tags) => {
 const newHeader = ((title) => {
   const id = `${Math.random().toString(36).substr(2, 9)}`
   const [title_new, tags] = extractTagsOrGenerateNew(title, 'head')
-  return {id : id, title: title_new, tags: tags}
+  return {id : id, title: title_new, tags: tags, size: 150}
 });
 
 const defaultRows = [newHeader(""), newHeader("1 #row1"), newHeader("2 #row2"), newHeader("3 #row3")];
@@ -225,8 +225,7 @@ const Grid = () => {
 
   const [selection, setSelection] = useState([])
   const [draggedNoteInst, setDraggedNoteInst] = useState("")
-  const [colWidths, setColWidths] = useState(cols.map(() => 150)); // Default width
-
+  
   /*
   useEffect(() => {
     console.log("ABC Selection changed:", selection);
@@ -481,11 +480,11 @@ const Grid = () => {
 
   const handleColResizeMouseDown = (e, index) => {
     const startX = e.clientX;
-    const startWidth = colWidths[index];
+    const startWidth = cols[index].size;
 
     const handleMouseMove = (moveEvent) => {
         const newWidth = Math.max(50, startWidth + (moveEvent.clientX - startX));
-        setColWidths((prev) => prev.map((w, i) => (i === index ? newWidth : w)));
+        setCols((prev) => prev.map((col, i) => (i === index ? { ...col, size: newWidth} : col)))
     };
 
     const handleMouseUp = () => {
@@ -511,7 +510,7 @@ const Grid = () => {
         onDoubleClick={() => handleHeaderDoubleClick(0, colIndex, false)}
         onContextMenu={(event) => handleHeaderContextMenu(event, 0, colIndex)}
         key={cellKey}
-        style={{ position: `${position}`, width: `${colWidths[colIndex]}px` }}
+        style={{ position: `${position}`, width: `${cols[colIndex].size}px` }}
       >
         {isEditing ? (
           <input
@@ -709,7 +708,7 @@ const Grid = () => {
             onDoubleClick={() => handleNoteCellDoubleClick(rowIndex, colIndex)}
             onClick={() => { setSelection([]); }}
             key={cellId}
-            style={{ width: `${colWidths[colIndex]}px`}}
+            style={{ width: `${cols[colIndex].size}px`}}
           >
             { 
               cellNotes.map((note, index) => {
