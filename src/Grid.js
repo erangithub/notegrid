@@ -696,7 +696,7 @@ const Grid = () => {
             }}
             autofocus/>
         )}
-        {isEditing && tags.length > 0 ? 
+        {(isEditing || isSelected) && tags.length > 0 ? 
             (<div style={{ color: "#555", marginLeft: "0px", wordwrap:"break-word", fontSize:10 }}>tags: {tags.join(" ")}</div>)
             : (<></>)
         }
