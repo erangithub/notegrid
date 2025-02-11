@@ -20,105 +20,183 @@ const MENU_ID_COLUMN = 'menu_col';
 const MENU_ID_ROW = 'menu_row';
 const MENU_ID_NOTE = 'menu_note';
 
+function setifyTags(...lists) {
+  return new Set(lists.flat());
+}
+
+function concatTags(...lists) {
+  // Flatten the lists, concatenate them, and remove duplicates using Set
+  return [...setifyTags(...lists)];
+}
+
+const extractTagsSet = (text) => {
+  return setifyTags(text.match(/#\w+/g) || []); // Extract hashtags and store them in a Set
+}
+
+const extractTags = (text) => {
+  return [...extractTagsSet(text)];
+};
+
+const extractTagsOrGenerateNew = (text, newTagPrefix) => {
+  const tags = extractTags(text);
+  if (tags.length === 0) {
+    const tag = '#' + newTagPrefix + `${Math.random().toString(36).substr(2, 9)}`;
+    tags.push(tag);
+    text += ' ' + tag;
+  }
+  return [text, tags];
+}
+
+const removeAllTagsFromText = (text) => {
+  return text.replace(/#\w+[ ]?/g, "").trim(); // Remove all hashtags
+};
+
+const removeTagsFromText = (text, tags = []) => {
+  if (tags.length === 0) {
+    // If no specific tags are provided, return the original text unchanged
+    return text;
+  } else {
+    // Create a regular expression pattern to match the specific tags as whole words
+    const pattern = new RegExp(`(${tags.join('|')})([ ]|\\b)`, 'g');
+    // Replace the matched tags with an empty string
+    return text.replace(pattern, '').trim();
+  }
+};
+
+const addTagsToText = (text, tags) => {
+  if (tags.length === 0) return;
+  return removeTagsFromText(text, tags).concat(' ').concat(tags.join(' '));
+};
+
+const newHeader = ((title) => {
+  const id = `${Math.random().toString(36).substr(2, 9)}`
+  const [title_new, tags] = extractTagsOrGenerateNew(title, 'head')
+  return {id : id, title: title_new, tags: tags}
+});
+
+const defaultRows = [newHeader(""), newHeader("1 #row1"), newHeader("2 #row2"), newHeader("3 #row3")];
+const defaultCols = [newHeader(""), newHeader("a #col1"), newHeader("b #col2"), newHeader("c #col3")];
+
 const Grid = () => {
-  const newHeader = ((title) => {
-    const id = `${Math.random().toString(36).substr(2, 9)}`
-    return {id : id, title: title}
-  });
+  const [rows, setRows] = useState(defaultRows); 
+  const [cols, setCols] = useState(defaultCols);
 
-  const [rows, setRows] = useState([newHeader(""), newHeader("1"), newHeader("2"), newHeader("3")]); 
-  const [cols, setCols] = useState([newHeader(""), newHeader("a"), newHeader("b"), newHeader("c")]);
+  const [notes, setNotes] = useState ({ });
 
-  const [notesState, setNotesState] = useState ( {notes: { }, cells: {} });
-
-  const getCellId = (i, j) => `${rows[i].id};${cols[j].id}`;
-
-  const newNote = (text, cellId) => {
+  const newNote = (text, rowIndex, colIndex) => {
     const creationDate = Date.now();
     const id = `note-${creationDate}-${Math.random().toString(36).substr(2, 9)}`;
-    const note = { id: id, createDate: creationDate, text: text, parentId: cellId };
+    const textWithHeaderTags = addTagsToText(text, rows[rowIndex].tags.concat(cols[colIndex].tags));
+    const note = { id: id, createDate: creationDate, text: textWithHeaderTags, order: 0 };
   
-    // Updating the notes and cells state together
-    setNotesState((prevNotes) => {
-      const newNotes = { ...prevNotes.notes, [id]: note };
-  
-      // Update cells with the new note
-      const newCells = {
-        ...prevNotes.cells,
-        [cellId]: [...(prevNotes.cells[cellId] || []), id], // Add the note to the specified cell
-      };
-  
-      console.log("newNotes", newNotes);
-
-      return {
-        notes: newNotes,
-        cells: newCells,
-      };
+    setNotes((prevNotes) => {
+      return { ...prevNotes, [id]: note };
     });
   
-    
     return note;
   };
 
-  const placeNotesInCell = (noteIds, cellId, index = undefined) => {
-    setNotesState((prevNotes) => {
-      var { notes, cells } = prevNotes;
-      for (let idx = noteIds.length-1; idx >= 0; idx--) {
-        const noteId = noteIds[idx];
+  const compareNotes = (note1, note2) => {
+    return note1.order - note2.order;
+  };
 
-        var note = notes[noteId];
+  const findNotesByRowCol = (notes, rowIndex, colIndex) => {
+    const cellTags = getTagsByRowCol(rowIndex, colIndex);
 
-        // Get the current notes in the parent cell
-        const prevCellId = note.parentId;
-        const prevCellNotes = (cells[prevCellId] || []);
-        console.log("prevCellNotes", noteId, notes, cells);
-        
-        const oldIndex = prevCellNotes.length ? prevCellNotes.indexOf(noteId) : -1;
-        console.log("oldIndex", oldIndex);
+    // Convert dictionary (object) values into an array
+    const notesArray = Object.values(notes);
     
-        // Step 1: Remove from old cell (if it exists)
-        const updatedOldCellNotes = [...prevCellNotes];
-        
-        console.log("updatedOldCellNotes", updatedOldCellNotes)
-        if (oldIndex !== -1) updatedOldCellNotes.splice(oldIndex, 1);
-        console.log("updatedOldCellNotes", prevCellId, updatedOldCellNotes)
-        // If cellId is undefined, we're just removing the note
-        if (!cellId) {
-          return {
-            ...prevNotes,
-            cells: {
-              ...cells,
-              [prevCellId]: updatedOldCellNotes,
-            },
-          };
-        }
+    return notesArray.filter(note => {
+      const noteTags = extractTagsSet(note.text);
+      return cellTags.every(tag => noteTags.has(tag));
+    }).sort(compareNotes);
+  };
 
-        // Step 2: Add to new cell
-        const newCellNotes = prevCellId === cellId ? updatedOldCellNotes : [...(cells[cellId] || [])];
-        const insertIndex = index !== undefined ? index : newCellNotes.length;
-        newCellNotes.splice(insertIndex, 0, note.id);
+  const placeNotesInCell = (noteInstances, cellId, targetIndex) => {
+    const [rowIndex, colIndex] = cellIdToRowCol(cellId);
     
-        // Step 3: Update the parentId of the note (after moving it)
-        console.log("cellid", cellId)
+    setNotes((prevNotes) => {
+      let newNotes = { ...prevNotes }; // Ensure immutability
+  
+      const cellNotes = findNotesByRowCol(prevNotes, rowIndex, colIndex);
+      
+      const draggedNoteIds = new Set(
+          noteInstances
+            .filter(noteInst => noteInst.rowIndex === rowIndex && noteInst.colIndex === colIndex)
+            .map(noteInst => noteInst.noteId)
+      );
+
+      // Compute placement bounds
+      const { afterIndex, beforeIndex, numOtherNotesInCell } = computePlacementBounds(
+        cellNotes, draggedNoteIds, targetIndex
+      );
+
+      // Compute new order range
+      const { insertOrderFrom, deltaIndices } = computeInsertOrder(
+        cellNotes, noteInstances.length, afterIndex, beforeIndex, numOtherNotesInCell
+      );
+
+      let newInstances = [];
+
+      const destTags = getTagsByCellId(cellId);
+      noteInstances.forEach((instance, idx) => {
+        const noteId = instance.noteId;
+        let note = { ...newNotes[noteId] };
+
+        // Remove old tags and apply new tags
+        const sourceTags = getTagsByRowCol(instance.rowIndex, instance.colIndex) || [];
+        let text = removeTagsFromText(note.text, sourceTags);
+        note.text = addTagsToText(text, destTags);
+
+        // Assign new fractional order
+        note.order = insertOrderFrom + (idx + 1) * deltaIndices;
         
-        note.parentId = cellId;
-        cells = {
-          ...cells,
-          [prevCellId]: updatedOldCellNotes,
-          [cellId]: newCellNotes, 
-        };
-        notes = {
-          ...notes,
-          [note.id]: note, // Update the note’s parentId in the notes state
-        };
-      };
-      return {
-        ...prevNotes,
-        cells: cells,
-        notes: notes
-      };
+        // Store the modified note
+        newNotes[noteId] = note;
+
+        // Collect for selection update
+        newInstances.push({ noteId, rowIndex, colIndex });
+      });
+
+      setSelection(newInstances);
+      return newNotes;
     });
   };
+
+  // Helper function to compute placement bounds
+  const computePlacementBounds = (cellNotes, draggedNoteIds, targetIndex) => {
+    let afterIndex = null, beforeIndex = null;
+    let numOtherNotesInCell = 0;
+
+    cellNotes.forEach((note, idx) => {
+        if (draggedNoteIds.has(note.id)) return; // Ignore dragged notes
+        if (idx < targetIndex) afterIndex = idx;
+        if (beforeIndex === null && idx >= targetIndex) beforeIndex = idx;
+        numOtherNotesInCell++;
+    });
+
+    return { afterIndex, beforeIndex, numOtherNotesInCell };
+  };
+
+  // Helper function to compute new ordering range
+  const computeInsertOrder = (cellNotes, numDraggedNotes, afterIndex, beforeIndex, numOtherNotesInCell) => {
+    const insertOrderFrom = (numOtherNotesInCell === 0) 
+        ? -1 
+        : afterIndex === null 
+            ? cellNotes[beforeIndex].order - numDraggedNotes - 1 
+            : cellNotes[afterIndex].order;
+
+    const insertOrderTo = (numOtherNotesInCell === 0) 
+        ? numDraggedNotes + 1 
+        : beforeIndex === null 
+            ? cellNotes[afterIndex].order + numDraggedNotes + 1 
+            : cellNotes[beforeIndex].order;
+
+    const deltaIndices = (insertOrderTo - insertOrderFrom) / (numDraggedNotes + 1);
+    
+    return { insertOrderFrom, deltaIndices };
+  };
+
 
   const { show, hideAll } = useContextMenu({
     id: "menuId",
@@ -129,43 +207,72 @@ const Grid = () => {
 
   function handleHeaderContextMenu(event, rowIndex, colIndex){
     if (rowIndex < 1 && colIndex <1) return;
-    console.log("handleContextMenu", rowIndex, colIndex)
+
     event.preventDefault()
       show({
         event,
-        id: rowIndex == 0 ? MENU_ID_COLUMN : MENU_ID_ROW
+        id: rowIndex === 0 ? MENU_ID_COLUMN : MENU_ID_ROW
       })
     
     setContextMenuTarget({rowIndex: rowIndex, colIndex: colIndex})
   }
 
-  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editingNote, setEditingNote] = useState({rowIndex: null, colIndex: null, noteId: null});
   const [editText, setEditText] = useState("");
   const [editingHeader, setEditingHeader] = useState({rowIndex: null, colIndex: null});
   const [headerText, setHeaderText] = useState("");
   const [contextMenuTarget, setContextMenuTarget] = useState({rowIndex: null, colIndex: null});
 
   const [selection, setSelection] = useState([])
-  const [draggedNote, setDraggedNote] = useState("")
+  const [draggedNoteInst, setDraggedNoteInst] = useState("")
   const [colWidths, setColWidths] = useState(cols.map(() => 150)); // Default width
 
+  /*
+  useEffect(() => {
+    console.log("ABC Selection changed:", selection);
+  }, [selection]);
+
+  useEffect(() => {
+    console.log("BBB notes changed:", notes);
+  }, [notes]);
+  */
+
   const onDragStart = (item) => {
-    console.log("Item", item);
-    setDraggedNote(item.draggableId);
+    setDraggedNoteInst(item.draggableId);
+    const noteId = item.draggableId.split(" ")[0];
+    setSelection((prev) => {
+      const [rowIndex, colIndex] = cellIdToRowCol(item.source.droppableId);
+      if (!isNoteInArray(prev, noteId, rowIndex, colIndex)) {
+        const selectedNote = {noteId: noteId, rowIndex: rowIndex, colIndex: colIndex}
+        return [selectedNote];
+      }
+      return prev;
+    })
+  }
+
+  const getCellId = (i, j) => `${i};${j}`;
+
+  const cellIdToRowCol = (cellId) => {
+    return cellId.split(';').map(Number);
+  }
+
+  const getTagsByRowCol = (rowIndex, colIndex) => {
+    return concatTags(rows[rowIndex].tags || [], cols[colIndex].tags || [])
+  }
+
+  const getTagsByCellId = (cellId) => {
+    const [rowIndex, colIndex] = cellIdToRowCol(cellId)
+    return getTagsByRowCol(rowIndex, colIndex)
   }
 
   const onDragEnd = (result) => {
-    setDraggedNote("")
-    if (!result.destination) return;
-
-    const { source, destination } = result;
-    
-    if (selection.length) {
-      placeNotesInCell(selection, destination.droppableId, destination.index);
-    } else {
-      placeNotesInCell([draggedNote], destination.droppableId, destination.index);
+    if (!result.destination) {
+      setDraggedNoteInst("")
+      return;
     }
-    setSelection([]);
+
+    placeNotesInCell(selection, result.destination.droppableId, result.destination.index);
+    setDraggedNoteInst("")
   };
 
   const textareaRef = useRef(null);
@@ -176,15 +283,12 @@ const Grid = () => {
       textareaRef.current.style.height = ""; // Reset height
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px"; // Set new height
     }
-  }, [editingNoteId, editText]); // Runs when editing state or text content changes
+  }, [editingNote, editText]); // Runs when editing state or text content changes
 
-  useEffect( () => {
-    console.log(colWidths)
-  }, [colWidths])
-  const handleDoubleClick = (cellKey) => {
-    const newNoteObj = newNote("", cellKey);
-    setEditingNoteId(newNoteObj.id);
-    setEditText(newNoteObj.text);
+  const handleNoteCellDoubleClick = (rowIndex, colIndex) => {
+    const newNoteObj = newNote("", rowIndex, colIndex);
+    setEditingNote({rowIndex: rowIndex, colIndex: colIndex, noteId: newNoteObj.id});
+    setEditText("");
   };
 
   const handleHeaderDoubleClick = (rowIndex, colIndex, isRow) => {
@@ -205,12 +309,16 @@ const Grid = () => {
     if (editingHeader.rowIndex !== null) {
         // Save edited row header
         const updatedRows = [...rows];
-        updatedRows[editingHeader.rowIndex].title = headerText;
+        const [title, tags] = extractTagsOrGenerateNew(headerText, 'row_')
+        updatedRows[editingHeader.rowIndex].title = title;
+        updatedRows[editingHeader.rowIndex].tags = tags;
         setRows(updatedRows);
     } else if (editingHeader.colIndex !== null) {
         // Save edited column header
         const updatedCols = [...cols];
-        updatedCols[editingHeader.colIndex].title = headerText;
+        const [title, tags] = extractTagsOrGenerateNew(headerText, 'col_')
+        updatedCols[editingHeader.colIndex].title = title;
+        updatedCols[editingHeader.colIndex].tags = tags;
         setCols(updatedCols);
     }
     setEditingHeader({ row: null, col: null });
@@ -222,23 +330,24 @@ const Grid = () => {
     }
   };
   
-  const handleNoteDoubleClick = (note) => {
-    setEditingNoteId(note.id);
-    setEditText(note.text);
+  const handleNoteDoubleClick = (note, rowIndex, colIndex) => {
+    setEditingNote({rowIndex: rowIndex, colIndex: colIndex, noteId: note.id});
+    const tags = rows[rowIndex].tags.concat(cols[colIndex].tags);
+    setEditText(removeTagsFromText(note.text, tags));
   };
 
-  const handleNoteClick = (note, event) => {    
+  const handleNoteClick = (note, rowIndex, colIndex, event) => {    
     const isCtrlPressed = event.ctrlKey || event.metaKey; // Detect Ctrl (Windows/Linux) or Cmd (Mac)
-    
+    const selectedNote = {rowIndex: rowIndex, colIndex: colIndex, noteId: note.id}
     setSelection((prevSelection) => {
       if (isCtrlPressed) {
         // Toggle selection without overriding previous selection
-        return prevSelection.includes(note.id)
-          ? prevSelection.filter(id => id !== note.id) // Deselect if already selected
-          : [...prevSelection, note.id]; // Add to selection
+        return isNoteInArray(prevSelection, note.id, rowIndex, colIndex)
+          ? removeNoteFromArray(prevSelection, note, rowIndex, colIndex) // Deselect if already selected
+          : [...prevSelection, selectedNote]; // Add to selection
       } else {
         // Single selection mode (no Ctrl)
-        return prevSelection.includes(note.id) ? [] : [note.id];
+        return isNoteInArray(prevSelection, selectedNote.id, rowIndex, colIndex) ? [] : [selectedNote];
       }
     });
   };
@@ -248,23 +357,25 @@ const Grid = () => {
   };
 
   const handleBlur = () => {
-    if (editingNoteId) {
+    if (editingNote.noteId) {
       if (editText.trim() === "") {
         // Remove the note if it's empty
-        placeNotesInCell([editingNoteId], null);
+        setNotes((prevNotes) => {
+          const newNotes = { ...prevNotes }; // Create a shallow copy
+          delete newNotes[editingNote.noteId]; // Remove the note safely
+          return newNotes; // Return the updated object
+        });
       } else {
-        setNotesState((prevNotes) => ({
+        const textWithHeaderTags = addTagsToText(editText, rows[editingNote.rowIndex].tags.concat(cols[editingNote.colIndex].tags));
+        setNotes((prevNotes) => ({
           ...prevNotes,
-          notes: {
-            ...prevNotes.notes,
-            [editingNoteId]: {
-              ...prevNotes.notes[editingNoteId], // Keep other properties of the note unchanged
-              text: editText, // Update the text
-            },
-          }
+          [editingNote.noteId]: {
+            ...prevNotes[editingNote.noteId], // Keep other properties of the note unchanged
+            text: textWithHeaderTags, // Update the text
+          },
         }));
       }
-      setEditingNoteId(null);
+      setEditingNote({rowIndex: null, colIndex: null, noteId: null});
     }
   };
 
@@ -280,7 +391,7 @@ const Grid = () => {
     const data = {
       rows: rows,  // Include the row names
       cols: cols,  // Include the column names
-      notes: notesState, // Include the note data
+      notes: notes, // Include the note data
     };
 
     const jsonData = JSON.stringify(data, null, 2);
@@ -301,7 +412,7 @@ const Grid = () => {
         const loadedData = JSON.parse(reader.result);
         setRows(loadedData.rows);  // Restore the row headers
         setCols(loadedData.cols);  // Restore the column headers
-        setNotesState(loadedData.notes);  // Restore the notes
+        setNotes(loadedData.notes);  // Restore the notes
       } catch (error) {
         console.error('Error loading JSON:', error);
         alert('Failed to load JSON. Please make sure the file is valid.');
@@ -314,7 +425,7 @@ const Grid = () => {
   const addRow = (index) => {
     setRows((prevRows) => {
         const newRows = [...prevRows];
-        newRows.splice(index, 0, newHeader()); // Insert the new column at the given index
+        newRows.splice(index, 0, newHeader("")); // Insert the new column at the given index
         return newRows;
       }
     );
@@ -327,7 +438,7 @@ const Grid = () => {
   const addColumn = (index) => {
     setCols((prevCols) => {
         const newCols = [...prevCols];
-        newCols.splice(index, 0, newHeader()); // Insert the new column at the given index
+        newCols.splice(index, 0, newHeader("")); // Insert the new column at the given index
         return newCols;
       }
     );
@@ -336,24 +447,26 @@ const Grid = () => {
     setHeaderText("");
   };
 
+  // Todo - now deleting rows and columns isn't so harmful .. still need this?
   function isRowDeleteDisabled(rowIndex) {
     if (rowIndex < 1 || rows.length < 5) return true;
 
-    const rowKeyPrefix = `${rows[rowIndex].id};`;
-    const rowlHasNotes = Object.keys(notesState.cells).some(
-      key => key.startsWith(rowKeyPrefix) && notesState.cells[key].length > 0
-    );
-    return rowlHasNotes;
+    return false;
+    //const rowKeyPrefix = `${rows[rowIndex].id};`;
+    //const rowlHasNotes = Object.keys(notesState.cells).some(
+    //  key => key.startsWith(rowKeyPrefix) && notesState.cells[key].length > 0
+    //);
+    //return rowlHasNotes;
   }  
 
   function isColumnDeleteDisabled(colIndex) {
-    console.log(colIndex)
     if (colIndex < 1  || cols.length < 5) return true;
-    const colKeySuffix = `;${cols[colIndex].id}`;
-    const colHasNotes = Object.keys(notesState.cells).some(
-      key => key.endsWith(colKeySuffix) && notesState.cells[key].length > 0
-    );
-    return colHasNotes;
+    return false;
+    //const colKeySuffix = `;${cols[colIndex].id}`;
+    //const colHasNotes = Object.keys(notesState.cells).some(
+    //  key => key.endsWith(colKeySuffix) && notesState.cells[key].length > 0
+    //);
+    //return colHasNotes;
   }
 
   // Remove Row
@@ -458,9 +571,34 @@ const Grid = () => {
     );
   };
 
-  function isNoteSelected(note) {
-    return selection.includes(note.id);
+  function isNoteInArray(array, noteId, rowIndex, colIndex) {
+    const result = array.some(obj =>
+      obj.rowIndex === rowIndex &&
+      obj.colIndex === colIndex &&
+      obj.noteId === noteId
+    );
+    return result;
   }
+
+  function removeNoteFromArray(array, note, rowIndex, colIndex) {
+    const result = array.filter(obj =>
+      obj.rowIndex !== rowIndex ||
+      obj.colIndex !== colIndex ||
+      obj.noteId !== note.id
+    );
+    return result;
+  }
+
+  function isAnotherNoteInstanceSelected(note, rowIndex, colIndex) {    
+    const result = selection.some(obj =>
+      (obj.rowIndex !== rowIndex ||
+      obj.colIndex !== colIndex) &&
+      obj.noteId === note.id
+    );
+  
+    return result;
+  }
+
 
   function handleNoteContextMenu(event, noteId){
     event.preventDefault()
@@ -471,28 +609,24 @@ const Grid = () => {
     setContextMenuTarget(noteId)
   }
 
-  const extractTags = (text) => {
-    const tags = Array.from(new Set(text.match(/#\w+/g)) || []); // Extract hashtags and store them in a Set
-    console.log(tags)
-    return tags
-  };
+  const NoteUI = (note, rowIndex, colIndex, draggableId) => {
+    const isDragged = (draggableId === draggedNoteInst);
+    const isSelected = isNoteInArray(selection, note.id, rowIndex, colIndex);
+    const style = isDragged ? {outline: "2px solid blue", outlineOffset: "0px"}  
+                  : isSelected ? {outline: "1px solid blue", outlineOffset: "-1px"}  
+                  : isAnotherNoteInstanceSelected(note, rowIndex, colIndex) ?
+                    {outline: "1px dashed blue", outlineOffset: "-1px"}
+                  : {border : "0px"};
+    const selectedCount = draggedNoteInst ? selection.length : 0;
   
-  const removeTagsFromText = (text) => {
-    return text.replace(/#\w+/g, "").trim(); // Remove hashtags from display
-  };
-
-  const NoteUI = (note) => {
-    const style = isNoteSelected(note) ? {outline: "1px solid blue", outlineOffset: "-1px"}  : {border : "0px"};
-    const selectedCount = draggedNote ? selection.length : 0;
-  
-    if (draggedNote && isNoteSelected(note) && (note.id != draggedNote)) {
+    if (draggedNoteInst && !isDragged && isSelected) {
       style.outline = "0px";
       style.opacity = 0.5
     }
     
-    const isEditing = note.id === editingNoteId;
-    const tags = extractTags(isEditing ? editText : note.text);
-    const displayText = isEditing ? note.text : removeTagsFromText(note.text);
+    const isEditing = (note.id === editingNote.noteId) && (rowIndex === editingNote.rowIndex) && (colIndex === editingNote.colIndex);
+    const tags = concatTags(extractTags((isEditing ? editText : note.text)), rows[rowIndex].tags, cols[colIndex].tags);
+    const displayText = isEditing ? note.text : removeAllTagsFromText(note.text);
 
     if (tags.includes("#todo")) {
       style.backgroundColor = "lightgreen"
@@ -502,23 +636,23 @@ const Grid = () => {
 
     return (
       <div>
-        {(draggedNote == note.id && (selectedCount > 1)) ? (<div className="drag-count">{selectedCount}</div>) : (<></>)}
-      <div
-        className="note"
-        onDoubleClick={(e) => {
-          e.stopPropagation(); // Prevent triggering cell's double-click
-          handleNoteDoubleClick(note);
-        } }
-        onClick={(e) => {
-          e.stopPropagation();
-          if (note.id != editingNoteId) {
-            handleBlur();
-            handleNoteClick(note, e);
-          }
-        } }
-        style={style}
-        onContextMenu={(event) => {if (!isEditing) {handleNoteContextMenu(event, note.id)}}}  
-      >
+        {(draggedNoteInst === draggableId && (selectedCount > 1)) ? (<div className="drag-count">{selectedCount}</div>) : (<></>)}
+        <div
+          className="note"
+          onDoubleClick={(e) => {
+            e.stopPropagation(); // Prevent triggering cell's double-click
+            handleNoteDoubleClick(note, rowIndex, colIndex);
+          } }
+          onClick={(e) => {
+            e.stopPropagation();
+            if (note.id !== editingNote.noteId || rowIndex !== editingNote.rowIndex || colIndex !== editingNote.colIndex)  {
+              handleBlur();
+              handleNoteClick(note, rowIndex, colIndex, e);
+            }
+          } }
+          style={style}
+          onContextMenu={(event) => {if (!isEditing) {handleNoteContextMenu(event, note.id)}}}  
+        >
         {isEditing ? (
           <textarea
             ref={textareaRef}
@@ -533,7 +667,7 @@ const Grid = () => {
           <ReactMarkdown children={displayText} remarkPlugins={[remarkGfm, remarkMath]} 
             rehypePlugins={[rehypeRaw, rehypeKatex]} 
             components={{
-              code({ node, inline, className, children, ...props }: any) {
+              code({ node, inline, className, children, ...props }) {
                 const match = /language-(\w+)/.exec(className || '');
       
                 return !inline && match ? (
@@ -550,40 +684,47 @@ const Grid = () => {
             autofocus/>
         )}
         {isEditing && tags.length > 0 ? 
-            (<div style={{ color: "#555", marginLeft: "0px", wordwrap:"break-word", fontSize:8 }}>tags: {tags.join(" ")}</div>)
+            (<div style={{ color: "#555", marginLeft: "0px", wordwrap:"break-word", fontSize:10 }}>tags: {tags.join(" ")}</div>)
             : (<></>)
         }
       </div>
-      </div>);
-    }
+    </div>);
+  }
 
   const NotesCell = (rowIndex, colIndex) => {
-    const cellKey = getCellId(rowIndex, colIndex);
+    const cellId = getCellId(rowIndex, colIndex);
+    const cellNotes = findNotesByRowCol(notes, rowIndex, colIndex);
+
     return (
-      <Droppable key={cellKey} droppableId={cellKey}>
+      <Droppable key={cellId} droppableId={cellId}>
         {(provided) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
             className="droppable-cell"
-            onDoubleClick={() => handleDoubleClick(cellKey)}
-            onClick={() => setSelection([])}
-            key={cellKey}
+            onDoubleClick={() => handleNoteCellDoubleClick(rowIndex, colIndex)}
+            onClick={() => { setSelection([]); }}
+            key={cellId}
             style={{ width: `${colWidths[colIndex]}px`}}
           >
-            {notesState.cells[cellKey]?.map((noteId, index) => (
-              <Draggable key={noteId} draggableId={noteId} index={index}>
-                {(provided) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                  >
-                    {NoteUI(notesState.notes[noteId])}
-                  </div>
-                )}
-              </Draggable>
-            ))}
+            { 
+              cellNotes.map((note, index) => {
+                const draggableId = `${note.id} ${cellId}`;
+                return (
+                  <Draggable key={note.id} draggableId={draggableId} index={index}>
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                      >
+                        {NoteUI(note, rowIndex, colIndex, draggableId)}
+                      </div>
+                    )}
+                  </Draggable>
+                );
+              })
+            }
             {provided.placeholder}
           </div>
         )}
@@ -606,8 +747,8 @@ const Grid = () => {
         >
           {rows.map((row, rowIndex) =>
             cols.map((col, colIndex) => { 
-              if (rowIndex === 0) return ColumnHeader(col.title, colIndex);
-              if (colIndex === 0) return RowHeader(row.title, rowIndex);
+              if (rowIndex === 0) return ColumnHeader(removeAllTagsFromText(col.title), colIndex);
+              if (colIndex === 0) return RowHeader(removeAllTagsFromText(row.title), rowIndex);
               return NotesCell(rowIndex, colIndex);
             })
           )}
